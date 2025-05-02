@@ -79,6 +79,7 @@ jobs:
           Import-Module WebAdministration
 
           if (Test-Path IIS:\AppPools\Backend) {
+            Write-Output "Stopping existing AppPool..."
             Stop-WebAppPool -Name 'Backend'
           }
 
@@ -87,21 +88,27 @@ jobs:
             $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
             Compress-Archive -Path "$env:DEPLOY_DIR\*" -DestinationPath "C:\Backups\backend-backup-$timestamp.zip" -Force
             Remove-Item -Path "$env:DEPLOY_DIR\*" -Recurse -Force
+            Write-Output "existing files removed."
           } else {
             New-Item -ItemType Directory -Path "$env:DEPLOY_DIR" -Force
+            Write-Output "Directory created."
           }
 
           Copy-Item -Path ".\publish\*" -Destination "$env:DEPLOY_DIR" -Recurse -Force
+          Write-Output "Files copied."
 
           if (Test-Path IIS:\AppPools\Backend) {
             Start-WebAppPool -Name 'Backend'
+            Write-Output "AppPool started."
           } else {
             New-WebAppPool -Name 'Backend'
             Set-ItemProperty -Path 'IIS:\AppPools\Backend' -Name managedRuntimeVersion -Value 'v4.0'
+            Write-Output "AppPool created."
           }
 
           if (-not (Test-Path IIS:\Sites\Backend)) {
             New-Website -Name 'Backend' -PhysicalPath "$env:DEPLOY_DIR" -Port 8080 -ApplicationPool 'Backend'
+            Write-Output "Website created."
           }
 
           Write-Output "Deployment completed successfully!"
