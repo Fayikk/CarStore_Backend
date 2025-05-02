@@ -1,0 +1,107 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ test ]
+
+env:
+  PROJECT_DIR: '.\\'
+  DEPLOY_DIR: 'C:\\inetpub\\wwwroot\\Backend_Project'
+  BUILD_CONFIG: 'Release'
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  build:
+    name: Build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration ${{ env.BUILD_CONFIG }} --no-restore
+
+      - name: Publish
+        run: dotnet publish --configuration ${{ env.BUILD_CONFIG }} --output .\publish --no-build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish
+          path: .\publish\
+
+  test:
+    name: Test
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Run tests
+        run: dotnet test --configuration ${{ env.BUILD_CONFIG }} --no-build
+
+  deploy:
+    name: Deploy to IIS
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish
+          path: .\publish\
+
+      - name: Deploy to IIS
+        shell: powershell
+        run: |
+          Write-Output "Deploying to IIS at $env:DEPLOY_DIR..."
+
+          Import-Module WebAdministration
+
+          if (Test-Path IIS:\AppPools\Backend) {
+            Stop-WebAppPool -Name 'Backend'
+          }
+
+          if (Test-Path "$env:DEPLOY_DIR") {
+            New-Item -ItemType Directory -Path "C:\Backups" -Force -ErrorAction SilentlyContinue
+            $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            Compress-Archive -Path "$env:DEPLOY_DIR\*" -DestinationPath "C:\Backups\backend-backup-$timestamp.zip" -Force
+            Remove-Item -Path "$env:DEPLOY_DIR\*" -Recurse -Force
+          } else {
+            New-Item -ItemType Directory -Path "$env:DEPLOY_DIR" -Force
+          }
+
+          Copy-Item -Path ".\publish\*" -Destination "$env:DEPLOY_DIR" -Recurse -Force
+
+          if (Test-Path IIS:\AppPools\Backend) {
+            Start-WebAppPool -Name 'Backend'
+          } else {
+            New-WebAppPool -Name 'Backend'
+            Set-ItemProperty -Path 'IIS:\AppPools\Backend' -Name managedRuntimeVersion -Value 'v4.0'
+          }
+
+          if (-not (Test-Path IIS:\Sites\Backend)) {
+            New-Website -Name 'Backend' -PhysicalPath "$env:DEPLOY_DIR" -Port 8080 -ApplicationPool 'Backend'
+          }
+
+          Write-Output "Deployment completed successfully!"
