@@ -34,3 +34,4 @@ C:\CarStore\CarStore\obj\Debug\net9.0\ref\CarStore.dll
 C:\CarStore\CarStore\bin\Debug\net9.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\CarStore\CarStore\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\CarStore\CarStore\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\CarStore\CarStore\obj\Debug\net9.0\CarStore.sourcelink.json
