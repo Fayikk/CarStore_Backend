@@ -1,0 +1,59 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DEPLOY_DIR: 'C:\\inetpub\\wwwroot\\Backend_Project'
+  BUILD_CONFIG: 'Release'
+  DOTNET_VERSION: 'net9.0'
+
+build:
+  stage: build
+  tags:
+    - Backend_Runner
+  script:
+    - echo "Building .NET project..."
+    - dotnet restore
+    # Çözüm yapılandırmasını açıkça belirtin
+    - dotnet build --configuration $BUILD_CONFIG --no-restore
+    - dotnet publish --configuration $BUILD_CONFIG --output .\publish --no-build
+  artifacts:
+    paths:
+      - .\publish\
+
+test:
+  stage: test
+  tags:
+    - Backend_Runner
+  script:
+    - echo "Running tests..."
+    - dotnet test --configuration $BUILD_CONFIG --no-build
+  dependencies:
+    - build
+
+deploy:
+  stage: deploy
+  tags:
+    - Backend_Runner
+  script:
+    - echo "Deploying to IIS at $DEPLOY_DIR..."
+    # Uygulama havuzunu durdur
+    - powershell -Command "Import-Module WebAdministration; if (Test-Path IIS:\AppPools\Backend) { Stop-WebAppPool -Name 'Backend' }"
+    # Yedekle
+    - powershell -Command "if (Test-Path '$DEPLOY_DIR') { New-Item -ItemType Directory -Path 'C:\Backups' -Force -ErrorAction SilentlyContinue; Compress-Archive -Path '$DEPLOY_DIR\*' -DestinationPath 'C:\Backups\backend-backup-$(Get-Date -Format \"yyyyMMdd-HHmmss\").zip' -Force }"
+    # Eski dosyaları sil
+    - powershell -Command "if (Test-Path '$DEPLOY_DIR') { Remove-Item -Path '$DEPLOY_DIR\*' -Recurse -Force }"
+    # Dizin oluştur
+    - powershell -Command "if (-not (Test-Path '$DEPLOY_DIR')) { New-Item -ItemType Directory -Path '$DEPLOY_DIR' -Force }"
+    # Dosyaları kopyala
+    - powershell -Command "Copy-Item -Path '.\publish\*' -Destination '$DEPLOY_DIR' -Recurse -Force"
+    # Uygulama havuzunu başlat
+    - powershell -Command "Import-Module WebAdministration; if (Test-Path IIS:\AppPools\Backend) { Start-WebAppPool -Name 'Backend' }"
+    # Web sitesi yoksa oluştur
+    - powershell -Command "Import-Module WebAdministration; if (-not (Test-Path IIS:\Sites\Backend)) { New-Website -Name 'Backend' -PhysicalPath '$DEPLOY_DIR' -Port 8080 -ApplicationPool 'Backend' }"
+    # AppPool yoksa oluştur
+    - powershell -Command "Import-Module WebAdministration; if (-not (Test-Path IIS:\AppPools\Backend)) { New-WebAppPool -Name 'Backend'; Set-ItemProperty -Path 'IIS:\AppPools\Backend' -Name managedRuntimeVersion -Value 'v4.0' }"
+    - echo "Deployment completed successfully!"
+  dependencies:
+    - build
