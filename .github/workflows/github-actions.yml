@@ -42,7 +42,7 @@ jobs:
   test:
     name: Test
     runs-on: windows-latest
-    needs: deploy
+    needs: build
 
     steps:
       - name: Checkout repository
@@ -62,7 +62,7 @@ jobs:
   deploy:
     name: Deploy to IIS
     runs-on: windows-latest
-    needs: build
+    needs: test
 
     steps:
       - name: Download artifact
