@@ -41,7 +41,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: windows-latest
+    runs-on: self-hosted
     needs: build
 
     steps:
@@ -61,7 +61,7 @@ jobs:
 
   deploy:
     name: Deploy to IIS
-    runs-on: windows-latest
+    runs-on: self-hosted
     needs: test
 
     steps:
