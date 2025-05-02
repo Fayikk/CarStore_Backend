@@ -42,7 +42,7 @@ jobs:
   test:
     name: Test
     runs-on: windows-latest
-    needs: build
+    needs: deploy
 
     steps:
       - name: Checkout repository
