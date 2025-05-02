@@ -1,0 +1,99 @@
+trigger:
+  branches:
+    include:
+      - test  # veya kullanmak istediğin branch
+
+pool:
+  name: Default  # veya kendi self-hosted agent pool adın örn: 'Devopsvmbackend'
+
+variables:
+  PROJECT_DIR: '.\\'
+  DEPLOY_DIR: 'C:\\inetpub\\wwwroot\\Backend_Project'
+  BUILD_CONFIG: 'Release'
+  DOTNET_VERSION: 'net9.0'
+
+stages:
+
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build .NET Project'
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '9.0.x'
+        installationPath: $(Agent.ToolsDirectory)/dotnet
+
+    - script: |
+        echo "Restoring packages..."
+        dotnet restore
+        echo "Building..."
+        dotnet build --configuration $(BUILD_CONFIG) --no-restore
+        echo "Publishing..."
+        dotnet publish --configuration $(BUILD_CONFIG) --output $(Build.ArtifactStagingDirectory)\publish --no-build
+      displayName: 'Build and Publish Project'
+
+    - publish: $(Build.ArtifactStagingDirectory)\publish
+      artifact: drop
+
+- stage: Test
+  displayName: 'Test Stage'
+  dependsOn: Build
+  jobs:
+  - job: TestJob
+    displayName: 'Run Tests'
+    steps:
+    - script: |
+        echo "Running tests..."
+        dotnet test --configuration $(BUILD_CONFIG) --no-build
+      displayName: 'Run .NET Tests'
+
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: DeployJob
+    displayName: 'Deploy to IIS'
+    steps:
+    - download: current
+      artifact: drop
+
+    - powershell: |
+        echo "Deploying to IIS at $(DEPLOY_DIR)..."
+
+        Import-Module WebAdministration
+
+        if (Test-Path IIS:\AppPools\Backend) {
+          Stop-WebAppPool -Name 'Backend'
+        }
+
+        if (Test-Path '$(DEPLOY_DIR)') {
+          $backupPath = "C:\Backups"
+          if (!(Test-Path $backupPath)) {
+            New-Item -ItemType Directory -Path $backupPath -Force
+          }
+          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+          Compress-Archive -Path "$(DEPLOY_DIR)\*" -DestinationPath "$backupPath\backend-backup-$timestamp.zip" -Force
+          Remove-Item -Path "$(DEPLOY_DIR)\*" -Recurse -Force
+        } else {
+          New-Item -ItemType Directory -Path "$(DEPLOY_DIR)" -Force
+        }
+
+        Copy-Item -Path "$(Pipeline.Workspace)\drop\*" -Destination "$(DEPLOY_DIR)" -Recurse -Force
+
+        if (-not (Test-Path IIS:\AppPools\Backend)) {
+          New-WebAppPool -Name 'Backend'
+          Set-ItemProperty -Path 'IIS:\AppPools\Backend' -Name managedRuntimeVersion -Value 'v4.0'
+        }
+
+        if (-not (Test-Path IIS:\Sites\Backend)) {
+          New-Website -Name 'Backend' -PhysicalPath "$(DEPLOY_DIR)" -Port 8080 -ApplicationPool 'Backend'
+        }
+
+        Start-WebAppPool -Name 'Backend'
+
+        echo "Deployment completed successfully!"
+      displayName: 'Deploy Application to IIS'
