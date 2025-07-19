@@ -8,7 +8,7 @@ namespace CarStore.Controllers
     [ApiController]
     public class CarController : ControllerBase
     {
-        private static readonly List<Car> cars= new List<Car>() { new Car { Brand="Audi",Model="A5",Price=50000 }, new Car { Brand = "BMW", Model = "M5", Price = 55000 } } ;
+        private static readonly List<Car> cars= new List<Car>() { new Car { Brand="Audi",Model="A5",Price=50000 }, new Car { Brand = "Corvette", Model = "CX2", Price = 50000 }, new Car { Id = 1,Brand = "BMW", Model = "M5", Price = 55000 } } ;
 
         [HttpGet]
         public ActionResult<List<Car>> GetAllCars()
